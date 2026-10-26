@@ -42,8 +42,14 @@ jobs:
       - name: Download IPA
         run: |
           mkdir -p ipa
-          curl -fsSL "${{ inputs.ipa_url }}" -o ipa/spotify.ipa
-          case "$(file --mime-type -b ipa/spotify.ipa)" in application/zip|application/x-ios-app) ;; *) echo "::error::Not an IPA"; exit 1 ;; esac
+          # Filebin first returns a verification cookie and HTML, so retry with the cookie.
+          cookiejar="$(mktemp)"
+          curl -fsSL -c "$cookiejar" -b "$cookiejar" "${{ inputs.ipa_url }}" -o ipa/spotify.ipa
+          if ! unzip -tq ipa/spotify.ipa >/dev/null 2>&1; then
+            curl -fsSL -c "$cookiejar" -b "$cookiejar" "${{ inputs.ipa_url }}" -o ipa/spotify.ipa
+          fi
+          rm -f "$cookiejar"
+          unzip -tq ipa/spotify.ipa >/dev/null || { echo "::error::Download was not a valid IPA"; exit 1; }
 
       - run: make release
 
